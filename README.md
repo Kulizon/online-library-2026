@@ -195,3 +195,60 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 #### PATCH `/api/rentals/:id/return`
 - Logika: zmiana statusu na `returned`, zwiększenie `availableCopies` w BookService.
 - Odpowiedź `200`: `{ "id", "status": "returned", "returnedAt" }`
+
+---
+
+## 6. Stos technologiczny
+
+| Warstwa    | Technologia                        |
+|------------|------------------------------------|
+| Frontend   | React (Vite), React Router, Axios  |
+| Backend    | Node.js LTS, Express, cors, jsonwebtoken, bcrypt |
+| ORM        | Sequelize                          |
+| Baza danych| SQLite3 (osobna baza per serwis)   |
+| Autoryzacja| JWT (JSON Web Token)               |
+| Konfiguracja| zmienne środowiskowe (pliki `.env` + dotenv) |
+
+---
+
+## 7. Uruchomienie projektu
+
+```bash
+# 1. Instalacja zależności
+make install
+
+# 2. Skopiowanie plików konfiguracyjnych
+cp services/auth/.env.example services/auth/.env
+cp frontend/.env.example frontend/.env
+
+# 3. Uruchomienie wszystkiego naraz
+make dev
+
+# Lub osobno:
+make auth      # AuthService na :3001
+make frontend  # React SPA na :5173
+```
+
+---
+
+## 8. Struktura repozytorium
+
+```
+online-library-2026/
+├── frontend/              # React SPA (Vite)
+│   ├── src/
+│   │   ├── context/       # AuthContext (stan sesji)
+│   │   ├── pages/         # Login, Register, Home
+│   │   ├── api.js         # Axios instance
+│   │   └── App.jsx        # Routing
+│   └── .env.example
+├── services/
+│   └── auth/              # AuthService (Express + Sequelize)
+│       ├── models/        # User model
+│       ├── routes/        # /api/auth/*
+│       ├── middleware/    # JWT verification
+│       └── .env.example
+├── Makefile
+├── .gitignore
+└── README.md
+```
