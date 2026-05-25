@@ -18,6 +18,29 @@ System ma charakter aplikacji webowej typu client–server, z frontendem realizo
 
 Aplikacja nie udostępnia treści książek w formie cyfrowej - wypożyczenie polega na rezerwacji książki online i jej fizycznym odbiorze w księgarni.
 
+### 1.1. Potrzeby biznesowe
+Projekt odpowiada na kluczowe potrzeby operacyjne księgarni i biblioteki:
+- digitalizacja procesu rezerwacji książek i ograniczenie obsługi telefonicznej / manualnej,
+- zwiększenie rotacji dostępnych egzemplarzy poprzez lepszą kontrolę statusów wypożyczeń,
+- zmniejszenie liczby błędów związanych z dostępnością (np. podwójna rezerwacja tego samego egzemplarza),
+- usprawnienie pracy personelu dzięki centralnej liście rezerwacji, odbiorów i zwrotów,
+- budowanie lojalności klientów poprzez wygodny kanał online i szybszą obsługę na miejscu.
+
+### 1.2. Korzyści dla użytkowników
+Najważniejsze korzyści z punktu widzenia użytkowników systemu:
+
+**Dla klienta księgarni:**
+- wygodne wyszukiwanie i rezerwowanie książek bez wizyty w placówce,
+- szybka informacja o dostępności i przewidywanym terminie odbioru,
+- podgląd własnych wypożyczeń i statusów rezerwacji w jednym miejscu,
+- krótszy czas obsługi przy odbiorze książki w księgarni.
+
+**Dla bibliotekarza / administratora:**
+- łatwiejsze zarządzanie katalogiem i stanami magazynowymi,
+- bieżąca kontrola nad kolejką rezerwacji, odbiorów i zwrotów,
+- mniejsze ryzyko pomyłek operacyjnych dzięki uporządkowanemu procesowi,
+- możliwość szybszego reagowania na braki i zapotrzebowanie klientów.
+
 ## 2. Funkcjonalności systemu
 
 ### 2.1. Funkcjonalności klienta księgarni
