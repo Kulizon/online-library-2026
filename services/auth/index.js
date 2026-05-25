@@ -1,4 +1,5 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 const express = require('express');
 const cors = require('cors');
 const { sequelize } = require('./models');
@@ -16,4 +17,7 @@ sequelize.sync().then(() => {
   app.listen(PORT, () => {
     console.log(`AuthService running on port ${PORT}`);
   });
+}).catch((error) => {
+  console.error('Failed to start AuthService:', error.message);
+  process.exit(1);
 });
