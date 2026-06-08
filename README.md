@@ -137,7 +137,8 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 | id             | INTEGER (PK) | Klucz główny, auto-increment            |
 | title          | STRING       | Tytuł książki                           |
 | author         | STRING       | Autor / autorzy                         |
-| isbn           | STRING       | Numer ISBN (unikalny)                   |
+| isbn           | STRING       | Numer ISBN-10 lub ISBN-13, np. `832401234X` albo `978-83-8196-545-3` (unikalny) |
+| ean            | STRING       | Kod EAN, 13 cyfr bez myślników (unikalny, opcjonalny) |
 | description    | TEXT         | Opis / streszczenie książki             |
 | totalCopies    | INTEGER      | Łączna liczba egzemplarzy w magazynie   |
 | availableCopies| INTEGER      | Liczba egzemplarzy aktualnie dostępnych |
@@ -195,9 +196,13 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 
 #### GET `/api/books?search=&page=&limit=`
 - Odpowiedź `200`: `{ "books": [...], "total", "page", "totalPages" }`
+- `search` szuka po tytule, autorze, ISBN oraz EAN.
 
 #### POST `/api/books`
-- Body: `{ "title", "author", "isbn", "description", "totalCopies" }`
+- Body: `{ "title", "author", "isbn", "ean", "description", "totalCopies" }`
+- `isbn`: ISBN-10 lub ISBN-13, np. `832401234X` albo `978-83-8196-545-3`
+- `ean`: 13 cyfr bez myślników, np. `9788381965453`
+- Można podać samo `ean`; dla kodów zaczynających się od `978`/`979` serwis uzupełni ISBN-13 automatycznie.
 - Odpowiedź `201`: `{ "id", "title", ... }`
 
 ### 5.3. RentalService (`/api/rentals`)
@@ -242,6 +247,7 @@ make install
 
 # 2. Skopiowanie plików konfiguracyjnych
 cp services/auth/.env.example services/auth/.env
+cp services/books/.env.example services/books/.env
 cp frontend/.env.example frontend/.env
 
 # 3. Uruchomienie wszystkiego naraz
@@ -249,8 +255,40 @@ make dev
 
 # Lub osobno:
 make auth      # AuthService na :3001
+make books     # BookService na :3002
 make frontend  # React SPA na :5173
 ```
+
+### 7.1. Konta bibliotekarza i administratora
+
+Zwykla rejestracja przez `POST /api/auth/register` zawsze tworzy konto klienta.
+
+Pierwsze konto administratora moze zostac utworzone automatycznie przy starcie `AuthService` na podstawie zmiennych w `services/auth/.env`:
+
+```env
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin123
+ADMIN_FIRST_NAME=System
+ADMIN_LAST_NAME=Admin
+```
+
+Po zalogowaniu admin moze tworzyc konta pracownicze przez:
+
+```http
+POST /api/auth/staff
+Authorization: Bearer <token-admina>
+Content-Type: application/json
+
+{
+  "email": "bibliotekarz@example.com",
+  "password": "haslo123",
+  "firstName": "Jan",
+  "lastName": "Kowalski",
+  "role": "librarian"
+}
+```
+
+Pole `role` przyjmuje wartosc `librarian` albo `admin`.
 
 ---
 
@@ -266,10 +304,15 @@ online-library-2026/
 │   │   └── App.jsx        # Routing
 │   └── .env.example
 ├── services/
-│   └── auth/              # AuthService (Express + Sequelize)
+│   ├── auth/              # AuthService (Express + Sequelize)
 │       ├── models/        # User model
 │       ├── routes/        # /api/auth/*
 │       ├── middleware/    # JWT verification
+│       └── .env.example
+│   └── books/             # BookService (Express + Sequelize)
+│       ├── models/        # Book model
+│       ├── routes/        # /api/books/*
+│       ├── middleware/    # JWT verification and role checks
 │       └── .env.example
 ├── Makefile
 ├── .gitignore

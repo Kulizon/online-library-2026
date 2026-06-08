@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -69,6 +69,38 @@ router.get('/me', authenticate, async (req, res) => {
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
     res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/staff
+router.post('/staff', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, role } = req.body;
+    const allowedRoles = ['librarian', 'admin'];
+
+    if (!email || !password || !firstName || !lastName || !allowedRoles.includes(role)) {
+      return res.status(400).json({
+        error: 'email, password, firstName, lastName and role librarian/admin are required',
+      });
+    }
+
+    const existing = await User.findOne({ where: { email } });
+    if (existing) {
+      return res.status(409).json({ error: 'Email already in use' });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      email,
+      password: hash,
+      firstName,
+      lastName,
+      role,
+    });
+
+    res.status(201).json({ id: user.id, email: user.email, role: user.role });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

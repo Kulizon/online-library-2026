@@ -1,7 +1,15 @@
 import axios from 'axios';
 
-const api = axios.create({
-  baseURL: import.meta.env.VITE_AUTH_SERVICE_URL,
+export const authApi = axios.create({
+  baseURL: import.meta.env.VITE_AUTH_SERVICE_URL || 'http://localhost:3001',
 });
 
-export default api;
+export const booksApi = axios.create({
+  baseURL: import.meta.env.VITE_BOOK_SERVICE_URL || 'http://localhost:3002',
+});
+
+export function authHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export default authApi;

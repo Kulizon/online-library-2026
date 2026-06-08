@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { ArrowRight, Library } from 'lucide-react';
+import { useAuth } from '../context/useAuth';
 
 export default function Register() {
   const { register } = useAuth();
@@ -8,43 +9,64 @@ export default function Register() {
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '' });
   const [error, setError] = useState('');
 
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (event) => {
+    setForm({ ...form, [event.target.name]: event.target.value });
+  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setError('');
     try {
       await register(form);
       navigate('/login');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(err.response?.data?.error || 'Nie udało się zarejestrować konta.');
     }
   };
 
   return (
-    <div style={{ maxWidth: 400, margin: '80px auto' }}>
-      <h1>Rejestracja</h1>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Imię</label>
-          <input name="firstName" value={form.firstName} onChange={handleChange} required style={{ width: '100%', padding: 8, marginBottom: 12 }} />
+    <main className="auth-layout">
+      <section className="auth-visual">
+        <div className="auth-brand">
+          <span className="brand-mark"><Library size={24} /></span>
+          <strong>Online Library</strong>
         </div>
-        <div>
-          <label>Nazwisko</label>
-          <input name="lastName" value={form.lastName} onChange={handleChange} required style={{ width: '100%', padding: 8, marginBottom: 12 }} />
+        <h1>Rezerwuj książki bez kolejki</h1>
+        <p>Konto klienta daje dostęp do katalogu i historii wypożyczeń.</p>
+      </section>
+
+      <section className="auth-panel">
+        <div className="auth-card">
+          <h2>Rejestracja</h2>
+          <p>Utwórz konto klienta biblioteki.</p>
+          {error && <div className="notice error">{error}</div>}
+          <form className="stack-form" onSubmit={handleSubmit}>
+            <div className="form-grid">
+              <label>
+                Imię
+                <input name="firstName" value={form.firstName} onChange={handleChange} required />
+              </label>
+              <label>
+                Nazwisko
+                <input name="lastName" value={form.lastName} onChange={handleChange} required />
+              </label>
+            </div>
+            <label>
+              Email
+              <input name="email" type="email" value={form.email} onChange={handleChange} required />
+            </label>
+            <label>
+              Hasło
+              <input name="password" type="password" value={form.password} onChange={handleChange} required />
+            </label>
+            <button className="primary-button wide" type="submit">
+              Utwórz konto
+              <ArrowRight size={17} />
+            </button>
+          </form>
+          <p className="auth-switch">Masz już konto? <Link to="/login">Zaloguj się</Link></p>
         </div>
-        <div>
-          <label>Email</label>
-          <input name="email" type="email" value={form.email} onChange={handleChange} required style={{ width: '100%', padding: 8, marginBottom: 12 }} />
-        </div>
-        <div>
-          <label>Hasło</label>
-          <input name="password" type="password" value={form.password} onChange={handleChange} required style={{ width: '100%', padding: 8, marginBottom: 12 }} />
-        </div>
-        <button type="submit" style={{ padding: '10px 20px' }}>Zarejestruj się</button>
-      </form>
-      <p>Masz już konto? <Link to="/login">Zaloguj się</Link></p>
-    </div>
+      </section>
+    </main>
   );
 }
