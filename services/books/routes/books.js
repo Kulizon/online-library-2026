@@ -6,6 +6,15 @@ const { authenticate, authorize } = require('../middleware/auth');
 const router = express.Router();
 const staffOnly = [authenticate, authorize('librarian', 'admin')];
 
+function internalOnly(req, res, next) {
+  const key = req.headers['x-internal-key'];
+  if (!process.env.INTERNAL_API_KEY || key !== process.env.INTERNAL_API_KEY) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  next();
+}
+
 function toPositiveInteger(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
@@ -76,6 +85,37 @@ router.get('/', async (req, res) => {
       page,
       totalPages: Math.ceil(count / limit),
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/books/:id/reserve
+router.post('/:id/reserve', internalOnly, async (req, res) => {
+  try {
+    const book = await Book.findByPk(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    if (book.availableCopies <= 0) {
+      return res.status(409).json({ error: 'No copies available' });
+    }
+
+    await book.update({ availableCopies: book.availableCopies - 1 });
+    res.json(book);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/books/:id/release
+router.post('/:id/release', internalOnly, async (req, res) => {
+  try {
+    const book = await Book.findByPk(req.params.id);
+    if (!book) return res.status(404).json({ error: 'Book not found' });
+
+    const availableCopies = Math.min(book.availableCopies + 1, book.totalCopies);
+    await book.update({ availableCopies });
+    res.json(book);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

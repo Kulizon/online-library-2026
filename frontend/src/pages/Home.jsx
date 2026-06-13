@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
+  Bookmark,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -8,13 +9,14 @@ import {
   Library,
   LogOut,
   Plus,
+  RotateCcw,
   Search,
   ShieldCheck,
   Trash2,
   UserPlus,
   X,
 } from 'lucide-react';
-import { booksApi, authHeaders } from '../api';
+import { booksApi, rentalsApi, authHeaders } from '../api';
 import { useAuth } from '../context/useAuth';
 
 const emptyBook = {
@@ -75,6 +77,18 @@ function isbnFromEan(value) {
   return ean.length === 13 ? formatIsbn(ean) : '';
 }
 
+function rentalStatusLabel(status) {
+  if (status === 'reserved') return 'Zarezerwowana';
+  if (status === 'picked_up') return 'Odebrana';
+  if (status === 'returned') return 'Zwrócona';
+  return status;
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString('pl-PL');
+}
+
 export default function Home() {
   const { user, token, logout, createStaffAccount } = useAuth();
   const [books, setBooks] = useState([]);
@@ -90,9 +104,15 @@ export default function Home() {
   const [editingBook, setEditingBook] = useState(null);
   const [bookForm, setBookForm] = useState(emptyBook);
   const [staffForm, setStaffForm] = useState(emptyStaff);
+  const [rentals, setRentals] = useState([]);
+  const [rentalsLoading, setRentalsLoading] = useState(false);
+  const [rentalNotice, setRentalNotice] = useState(null);
+  const [reservingBookId, setReservingBookId] = useState(null);
+  const [rentalActionId, setRentalActionId] = useState(null);
 
   const isStaff = user.role === 'librarian' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
+  const isClient = user.role === 'client';
   const visibleBooks = useMemo(() => (Array.isArray(books) ? books : []), [books]);
 
   const stats = useMemo(() => {
@@ -122,6 +142,22 @@ export default function Home() {
     }
   };
 
+  const loadRentals = async () => {
+    setRentalsLoading(true);
+    setRentalNotice(null);
+    try {
+      const endpoint = isStaff ? '/api/rentals/all' : '/api/rentals';
+      const res = await rentalsApi.get(endpoint, {
+        headers: authHeaders(token),
+      });
+      setRentals(Array.isArray(res.data.rentals) ? res.data.rentals : []);
+    } catch (err) {
+      setRentalNotice(notice('error', err.response?.data?.error || 'Nie udało się pobrać wypożyczeń.'));
+    } finally {
+      setRentalsLoading(false);
+    }
+  };
+
   useEffect(() => {
     booksApi.get('/api/books', {
       params: { search: submittedSearch, page, limit: 8 },
@@ -130,6 +166,10 @@ export default function Home() {
       .catch((err) => setCatalogNotice(notice('error', err.response?.data?.error || 'Nie udało się pobrać katalogu książek.')))
       .finally(() => setLoading(false));
   }, [page, submittedSearch]);
+
+  useEffect(() => {
+    loadRentals();
+  }, [token, user.role]);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -244,6 +284,54 @@ export default function Home() {
     }
   };
 
+  const reserveBook = async (book) => {
+    setReservingBookId(book.id);
+    setRentalNotice(null);
+    try {
+      const res = await rentalsApi.post('/api/rentals', { bookId: book.id }, {
+        headers: authHeaders(token),
+      });
+      setRentalNotice(notice('success', `Zarezerwowano „${book.title}”. Odbiór: ${formatDate(res.data.pickupDate)}.`));
+      await Promise.all([loadBooks(false), loadRentals()]);
+    } catch (err) {
+      setRentalNotice(notice('error', err.response?.data?.error || 'Nie udało się zarezerwować książki.'));
+    } finally {
+      setReservingBookId(null);
+    }
+  };
+
+  const markPickup = async (rental) => {
+    setRentalActionId(rental.id);
+    setRentalNotice(null);
+    try {
+      await rentalsApi.patch(`/api/rentals/${rental.id}/pickup`, null, {
+        headers: authHeaders(token),
+      });
+      setRentalNotice(notice('success', 'Wypożyczenie oznaczone jako odebrane.'));
+      await loadRentals();
+    } catch (err) {
+      setRentalNotice(notice('error', err.response?.data?.error || 'Nie udało się oznaczyć odbioru.'));
+    } finally {
+      setRentalActionId(null);
+    }
+  };
+
+  const markReturn = async (rental) => {
+    setRentalActionId(rental.id);
+    setRentalNotice(null);
+    try {
+      await rentalsApi.patch(`/api/rentals/${rental.id}/return`, null, {
+        headers: authHeaders(token),
+      });
+      setRentalNotice(notice('success', 'Wypożyczenie oznaczone jako zwrócone.'));
+      await Promise.all([loadBooks(false), loadRentals()]);
+    } catch (err) {
+      setRentalNotice(notice('error', err.response?.data?.error || 'Nie udało się oznaczyć zwrotu.'));
+    } finally {
+      setRentalActionId(null);
+    }
+  };
+
   useEffect(() => {
     if (!bookNotice) return;
 
@@ -263,6 +351,16 @@ export default function Home() {
 
     return () => clearTimeout(timer);
   }, [staffNotice]);
+
+  useEffect(() => {
+    if (!rentalNotice) return;
+
+    const timer = setTimeout(() => {
+      setRentalNotice(null);
+    }, 4000);
+
+    return () => clearTimeout(timer);
+  }, [rentalNotice]);
 
   return (
     <main className="app-shell">
@@ -412,6 +510,64 @@ export default function Home() {
               </form>
             </section>
           )}
+
+          <section className="panel-block">
+            <div className="panel-heading">
+              <Bookmark size={18} />
+              <h2>{isStaff ? 'Wypożyczenia w systemie' : 'Moje wypożyczenia'}</h2>
+            </div>
+            {rentalNotice && (
+              <div className={`notice inline ${rentalNotice.type}`}>
+                {rentalNotice.text}
+              </div>
+            )}
+            {rentalsLoading && <div className="empty-state compact">Ładowanie wypożyczeń...</div>}
+            {!rentalsLoading && rentals.length === 0 && (
+              <div className="empty-state compact">Brak wypożyczeń do wyświetlenia.</div>
+            )}
+            {!rentalsLoading && rentals.length > 0 && (
+              <div className="rental-list">
+                {rentals.map((rental) => (
+                  <article className="rental-item" key={rental.id}>
+                    <div>
+                      <strong>{rental.bookTitle || `Książka #${rental.bookId}`}</strong>
+                      {rental.bookAuthor && <p>{rental.bookAuthor}</p>}
+                      {isStaff && <span className="rental-meta">Klient #{rental.userId}</span>}
+                    </div>
+                    <div className="rental-details">
+                      <span className={`status-badge status-${rental.status}`}>{rentalStatusLabel(rental.status)}</span>
+                      <span className="rental-meta">Odbiór: {formatDate(rental.pickupDate)}</span>
+                      {rental.returnedAt && (
+                        <span className="rental-meta">Zwrot: {formatDate(rental.returnedAt)}</span>
+                      )}
+                    </div>
+                    {isStaff && rental.status === 'reserved' && (
+                      <button
+                        className="ghost-button compact"
+                        type="button"
+                        disabled={rentalActionId === rental.id}
+                        onClick={() => markPickup(rental)}
+                      >
+                        <Check size={16} />
+                        Odebrane
+                      </button>
+                    )}
+                    {isStaff && rental.status === 'picked_up' && (
+                      <button
+                        className="ghost-button compact"
+                        type="button"
+                        disabled={rentalActionId === rental.id}
+                        onClick={() => markReturn(rental)}
+                      >
+                        <RotateCcw size={16} />
+                        Zwrócone
+                      </button>
+                    )}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </aside>
 
         <section className="content-area">
@@ -456,6 +612,17 @@ export default function Home() {
                     {book.availableCopies}/{book.totalCopies} dostępne
                   </strong>
                 </div>
+                {isClient && book.availableCopies > 0 && (
+                  <button
+                    className="primary-button wide"
+                    type="button"
+                    disabled={reservingBookId === book.id}
+                    onClick={() => reserveBook(book)}
+                  >
+                    <Bookmark size={17} />
+                    {reservingBookId === book.id ? 'Rezerwowanie...' : 'Rezerwuj'}
+                  </button>
+                )}
                 {isStaff && (
                   <div className="card-actions">
                     <button className="icon-button subtle" type="button" onClick={() => startEditing(book)} title="Edytuj książkę">
