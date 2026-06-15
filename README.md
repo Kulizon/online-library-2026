@@ -248,6 +248,7 @@ make install
 # 2. Skopiowanie plików konfiguracyjnych
 cp services/auth/.env.example services/auth/.env
 cp services/books/.env.example services/books/.env
+cp services/rentals/.env.example services/rentals/.env
 cp frontend/.env.example frontend/.env
 
 # 3. Uruchomienie wszystkiego naraz
@@ -256,6 +257,7 @@ make dev
 # Lub osobno:
 make auth      # AuthService na :3001
 make books     # BookService na :3002
+make rentals   # RentalService na :3003
 make frontend  # React SPA na :5173
 ```
 
@@ -305,14 +307,20 @@ online-library-2026/
 │   └── .env.example
 ├── services/
 │   ├── auth/              # AuthService (Express + Sequelize)
-│       ├── models/        # User model
-│       ├── routes/        # /api/auth/*
-│       ├── middleware/    # JWT verification
-│       └── .env.example
-│   └── books/             # BookService (Express + Sequelize)
-│       ├── models/        # Book model
-│       ├── routes/        # /api/books/*
+│   │   ├── models/        # User model
+│   │   ├── routes/        # /api/auth/*
+│   │   ├── middleware/    # JWT verification
+│   │   └── .env.example
+│   ├── books/             # BookService (Express + Sequelize)
+│   │   ├── models/        # Book model
+│   │   ├── routes/        # /api/books/*
+│   │   ├── middleware/    # JWT verification and role checks
+│   │   └── .env.example
+│   └── rentals/           # RentalService (Express + Sequelize)
+│       ├── models/        # Rental model
+│       ├── routes/        # /api/rentals/*
 │       ├── middleware/    # JWT verification and role checks
+│       ├── lib/           # BookService client, pickup date
 │       └── .env.example
 ├── Makefile
 ├── .gitignore
