@@ -1,0 +1,15 @@
+{
+  "name": "integration-tests",
+  "private": true,
+  "scripts": {
+    "test": "jest --runInBand"
+  },
+  "jest": {
+    "testTimeout": 15000,
+    "testEnvironment": "node",
+    "testMatch": ["**/tests/**/*.test.js"]
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

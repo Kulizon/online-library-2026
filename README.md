@@ -89,8 +89,20 @@ Odpowiedzialność:
 ### 3.4. Frontend (React SPA)
 Odpowiedzialność:
 - renderowanie widoków po stronie klienta (CSR),
-- komunikacja z serwisami backendowymi poprzez REST API (fetch / axios),
-- zarządzanie stanem sesji użytkownika (przechowywanie JWT w pamięci / localStorage).
+- komunikacja z serwisami backendowymi poprzez REST API (Axios),
+- zarządzanie stanem sesji użytkownika (JWT w `localStorage`).
+
+Strony i funkcje:
+- `/login` — formularz logowania,
+- `/register` — formularz rejestracji klienta,
+- `/` (Home, chroniona) — główny widok aplikacji:
+  - katalog książek z wyszukiwaniem (tytuł / autor / ISBN / EAN) i paginacją (8 wyników na stronę),
+  - panel boczny ze statystykami katalogu (liczba książek, dostępne i łączne egzemplarze),
+  - widok klienta: przycisk „Rezerwuj" przy dostępnych książkach,
+  - widok bibliotekarza / admina: edycja i usuwanie książek, przyciski „Odebrane" / „Zwrócone" przy wypożyczeniach,
+  - widok admina: formularz tworzenia kont pracowniczych (bibliotekarz / admin),
+  - lista wypożyczeń: własne (klient) lub wszystkich użytkowników (personel), wzbogacona o tytuł i autora książki,
+  - formularz książki z automatycznym uzupełnianiem ISBN ↔ EAN.
 
 ### 3.5. Schemat komunikacji
 
@@ -125,7 +137,7 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 | password     | STRING       | Hash hasła (bcrypt)                       |
 | firstName    | STRING       | Imię użytkownika                          |
 | lastName     | STRING       | Nazwisko użytkownika                      |
-| role         | ENUM         | `'client'` / `'librarian'`                |
+| role         | ENUM         | `'client'` / `'librarian'` / `'admin'`    |
 | createdAt    | DATE         | Data utworzenia konta                      |
 | updatedAt    | DATE         | Data ostatniej modyfikacji                |
 
@@ -165,11 +177,12 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 
 ### 5.1. AuthService (`/api/auth`)
 
-| Metoda | Endpoint             | Opis                          | Autoryzacja |
-|--------|----------------------|-------------------------------|-------------|
-| POST   | `/api/auth/register` | Rejestracja nowego użytkownika| brak        |
-| POST   | `/api/auth/login`    | Logowanie, zwraca JWT         | brak        |
-| GET    | `/api/auth/me`       | Pobranie profilu zalogowanego | JWT         |
+| Metoda | Endpoint             | Opis                                    | Autoryzacja      |
+|--------|----------------------|-----------------------------------------|------------------|
+| POST   | `/api/auth/register` | Rejestracja nowego użytkownika          | brak             |
+| POST   | `/api/auth/login`    | Logowanie, zwraca JWT                   | brak             |
+| GET    | `/api/auth/me`       | Pobranie profilu zalogowanego użytkownika | JWT            |
+| POST   | `/api/auth/staff`    | Tworzenie konta bibliotekarza / admina  | JWT (admin)      |
 
 #### POST `/api/auth/register`
 - Body: `{ "email", "password", "firstName", "lastName" }`
@@ -183,16 +196,23 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 - Header: `Authorization: Bearer <token>`
 - Odpowiedź `200`: `{ "id", "email", "firstName", "lastName", "role" }`
 
+#### POST `/api/auth/staff`
+- Header: `Authorization: Bearer <token>` (wymagana rola `admin`)
+- Body: `{ "email", "password", "firstName", "lastName", "role": "librarian" | "admin" }`
+- Odpowiedź `201`: `{ "id", "email", "role" }`
+
 ### 5.2. BookService (`/api/books`)
 
-| Metoda | Endpoint           | Opis                              | Autoryzacja      |
-|--------|--------------------|-----------------------------------|------------------|
-| GET    | `/api/books`       | Lista książek (z paginacją/search)| brak / JWT       |
-| GET    | `/api/books/:id`   | Szczegóły pojedynczej książki     | brak / JWT       |
-| POST   | `/api/books`       | Dodanie nowej książki             | JWT (librarian)  |
-| PUT    | `/api/books/:id`   | Edycja danych książki             | JWT (librarian)  |
-| DELETE | `/api/books/:id`   | Usunięcie książki z katalogu      | JWT (librarian)  |
-| PATCH  | `/api/books/:id/stock` | Zmiana liczby egzemplarzy     | JWT (librarian)  |
+| Metoda | Endpoint                    | Opis                                       | Autoryzacja               |
+|--------|-----------------------------|--------------------------------------------|---------------------------|
+| GET    | `/api/books`                | Lista książek (z paginacją/search)         | brak                      |
+| GET    | `/api/books/:id`            | Szczegóły pojedynczej książki              | brak                      |
+| POST   | `/api/books`                | Dodanie nowej książki                      | JWT (librarian / admin)   |
+| PUT    | `/api/books/:id`            | Edycja danych książki                      | JWT (librarian / admin)   |
+| DELETE | `/api/books/:id`            | Usunięcie książki z katalogu               | JWT (librarian / admin)   |
+| PATCH  | `/api/books/:id/stock`      | Zmiana liczby egzemplarzy                  | JWT (librarian / admin)   |
+| POST   | `/api/books/:id/reserve`    | Zmniejszenie availableCopies (wewnętrzny)  | `X-Internal-Key` header   |
+| POST   | `/api/books/:id/release`    | Zwiększenie availableCopies (wewnętrzny)   | `X-Internal-Key` header   |
 
 #### GET `/api/books?search=&page=&limit=`
 - Odpowiedź `200`: `{ "books": [...], "total", "page", "totalPages" }`
@@ -204,6 +224,12 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 - `ean`: 13 cyfr bez myślników, np. `9788381965453`
 - Można podać samo `ean`; dla kodów zaczynających się od `978`/`979` serwis uzupełni ISBN-13 automatycznie.
 - Odpowiedź `201`: `{ "id", "title", ... }`
+
+#### POST `/api/books/:id/reserve` i `/api/books/:id/release`
+- Endpointy wewnętrzne używane wyłącznie przez RentalService.
+- Autoryzacja przez nagłówek `X-Internal-Key` (wartość z `INTERNAL_API_KEY` w `.env`).
+- `/reserve` zmniejsza `availableCopies` o 1; zwraca `409`, gdy brak egzemplarzy.
+- `/release` zwiększa `availableCopies` o 1 (maksymalnie do wartości `totalCopies`).
 
 ### 5.3. RentalService (`/api/rentals`)
 
@@ -217,11 +243,15 @@ Każdy serwis backendowy posiada własną bazę danych SQLite (zarządzaną prze
 
 #### POST `/api/rentals`
 - Body: `{ "bookId" }`
-- Logika: sprawdzenie dostępności (zapytanie do BookService), zmniejszenie `availableCopies`, ustawienie `pickupDate` na następny dzień roboczy.
+- Logika: sprawdzenie dostępności (zapytanie do BookService), wywołanie `/reserve` (wewnętrzne), ustawienie `pickupDate` na następny dzień roboczy.
 - Odpowiedź `201`: `{ "id", "bookId", "status": "reserved", "pickupDate" }`
 
+#### GET `/api/rentals` i GET `/api/rentals/all`
+- Odpowiedź `200`: `{ "rentals": [ { ...pola Rental, "bookTitle", "bookAuthor" }, ... ] }`
+- Pola `bookTitle` i `bookAuthor` są pobierane z BookService dla każdego wypożyczenia.
+
 #### PATCH `/api/rentals/:id/return`
-- Logika: zmiana statusu na `returned`, zwiększenie `availableCopies` w BookService.
+- Logika: zmiana statusu na `returned`, wywołanie `/release` w BookService (wewnętrzne).
 - Odpowiedź `200`: `{ "id", "status": "returned", "returnedAt" }`
 
 ---
@@ -261,11 +291,35 @@ make rentals   # RentalService na :3003
 make frontend  # React SPA na :5173
 ```
 
-### 7.1. Konta bibliotekarza i administratora
+### 7.1. Zmienne środowiskowe
 
-Zwykla rejestracja przez `POST /api/auth/register` zawsze tworzy konto klienta.
+Każdy serwis oraz frontend korzysta z własnego pliku `.env`. Przykładowe wartości są w plikach `.env.example`.
 
-Pierwsze konto administratora moze zostac utworzone automatycznie przy starcie `AuthService` na podstawie zmiennych w `services/auth/.env`:
+| Plik                         | Zmienna              | Opis                                                          |
+|------------------------------|----------------------|---------------------------------------------------------------|
+| `services/auth/.env`         | `PORT`               | Port AuthService (domyślnie `3001`)                           |
+| `services/auth/.env`         | `JWT_SECRET`         | Sekret do podpisywania tokenów JWT                            |
+| `services/auth/.env`         | `DB_PATH`            | Ścieżka do pliku SQLite AuthService                           |
+| `services/auth/.env`         | `ADMIN_EMAIL`        | Email konta administratora tworzonego przy starcie            |
+| `services/auth/.env`         | `ADMIN_PASSWORD`     | Hasło konta administratora tworzonego przy starcie            |
+| `services/books/.env`        | `PORT`               | Port BookService (domyślnie `3002`)                           |
+| `services/books/.env`        | `JWT_SECRET`         | Sekret JWT (taki sam jak w AuthService)                       |
+| `services/books/.env`        | `DB_PATH`            | Ścieżka do pliku SQLite BookService                           |
+| `services/books/.env`        | `INTERNAL_API_KEY`   | Klucz chroniący endpointy `/reserve` i `/release`             |
+| `services/rentals/.env`      | `PORT`               | Port RentalService (domyślnie `3003`)                         |
+| `services/rentals/.env`      | `JWT_SECRET`         | Sekret JWT (taki sam jak w AuthService)                       |
+| `services/rentals/.env`      | `DB_PATH`            | Ścieżka do pliku SQLite RentalService                         |
+| `services/rentals/.env`      | `BOOK_SERVICE_URL`   | Adres BookService (domyślnie `http://localhost:3002`)         |
+| `services/rentals/.env`      | `INTERNAL_API_KEY`   | Klucz wysyłany do BookService przy rezerwacji i zwrocie       |
+| `frontend/.env`              | `VITE_AUTH_SERVICE_URL`   | Adres AuthService widoczny dla przeglądarki               |
+| `frontend/.env`              | `VITE_BOOK_SERVICE_URL`   | Adres BookService widoczny dla przeglądarki               |
+| `frontend/.env`              | `VITE_RENTAL_SERVICE_URL` | Adres RentalService widoczny dla przeglądarki             |
+
+### 7.3. Konta bibliotekarza i administratora
+
+Zwykła rejestracja przez `POST /api/auth/register` zawsze tworzy konto klienta.
+
+Pierwsze konto administratora może zostać utworzone automatycznie przy starcie `AuthService` na podstawie zmiennych w `services/auth/.env`:
 
 ```env
 ADMIN_EMAIL=admin@example.com
@@ -294,7 +348,31 @@ Pole `role` przyjmuje wartosc `librarian` albo `admin`.
 
 ---
 
-## 8. Struktura repozytorium
+## 8. Testy integracyjne
+
+Testy integracyjne sprawdzają pełny przepływ przez wszystkie trzy serwisy: rejestrację i logowanie, operacje CRUD na książkach oraz cykl wypożyczenia (rezerwacja → odbiór → zwrot).
+
+**Wymagania:** uruchomione serwisy (`make dev`) oraz Node.js 18+.
+
+```bash
+make test
+# lub ręcznie:
+cd integration-tests && npm install && npm test
+```
+
+Domyślnie testy łączą się z serwisami pod standardowymi adresami. Można to zmienić zmiennymi środowiskowymi:
+
+```env
+AUTH_URL=http://localhost:3001
+BOOKS_URL=http://localhost:3002
+RENTALS_URL=http://localhost:3003
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=admin123
+```
+
+---
+
+## 9. Struktura repozytorium
 
 ```
 online-library-2026/
@@ -305,6 +383,12 @@ online-library-2026/
 │   │   ├── api.js         # Axios instance
 │   │   └── App.jsx        # Routing
 │   └── .env.example
+├── integration-tests/     # Testy integracyjne (Jest + fetch)
+│   ├── tests/
+│   │   ├── auth.test.js   # Testy AuthService
+│   │   ├── books.test.js  # Testy BookService
+│   │   └── rentals.test.js# Testy RentalService + pełny cykl wypożyczenia
+│   └── package.json
 ├── services/
 │   ├── auth/              # AuthService (Express + Sequelize)
 │   │   ├── models/        # User model
